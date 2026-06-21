@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOutLeft,
@@ -9,6 +9,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import { personById } from '../lib/people';
 import type { Item } from '../lib/types';
 import { colors } from '../theme/colors';
 import { fonts, radius, spacing } from '../theme/typography';
@@ -23,11 +24,22 @@ type Props = {
   onDelete: (item: Item) => void;
   onUp: (item: Item) => void;
   onDown: (item: Item) => void;
+  onAssign: (item: Item) => void;
 };
 
-function ChecklistItemBase({ item, canUp, canDown, onToggle, onDelete, onUp, onDown }: Props) {
+function ChecklistItemBase({
+  item,
+  canUp,
+  canDown,
+  onToggle,
+  onDelete,
+  onUp,
+  onDown,
+  onAssign,
+}: Props) {
   const [textWidth, setTextWidth] = useState(0);
   const progress = useSharedValue(item.is_done ? 1 : 0);
+  const person = personById(item.assignee);
 
   useEffect(() => {
     progress.value = withTiming(item.is_done ? 1 : 0, { duration: 260 });
@@ -67,6 +79,21 @@ function ChecklistItemBase({ item, canUp, canDown, onToggle, onDelete, onUp, onD
           </Animated.Text>
           <Animated.View style={[styles.strike, lineStyle]} pointerEvents="none" />
         </View>
+      </Pressable>
+
+      <Pressable
+        onPress={() => onAssign(item)}
+        hitSlop={6}
+        style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
+        accessibilityLabel="שיוך אחראי"
+      >
+        <View
+          style={[
+            styles.chipDot,
+            person ? { backgroundColor: person.color } : styles.chipDotNone,
+          ]}
+        />
+        {person && <Text style={styles.chipLabel}>{person.label}</Text>}
       </Pressable>
 
       <Pressable
@@ -116,7 +143,19 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: colors.strike,
   },
-  trash: { paddingStart: spacing.sm, paddingVertical: spacing.xs },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    backgroundColor: colors.surfaceAlt,
+    borderRadius: radius.pill,
+    paddingVertical: 5,
+    paddingHorizontal: spacing.sm,
+  },
+  chipDot: { width: 12, height: 12, borderRadius: 6 },
+  chipDotNone: { borderWidth: 2, borderColor: colors.textMuted },
+  chipLabel: { fontFamily: fonts.semibold, fontSize: 12, color: colors.text },
+  trash: { paddingStart: spacing.xs, paddingVertical: spacing.xs },
 });
 
 export const ChecklistItem = memo(ChecklistItemBase);

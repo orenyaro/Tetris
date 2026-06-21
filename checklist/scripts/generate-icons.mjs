@@ -1,24 +1,24 @@
 import { chromium } from 'playwright';
 
 const EXEC = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
-const LIME = '#CDFF4F';
-const INK = '#0E0E11';
+const TILE = '#1A1B20'; // dark tile
+const ORANGE = '#FFA94D'; // light-orange check
 
 // Rounded tile (transparent corners) — used for the "any" icons.
 const rounded = (check) => `
-  <rect width="512" height="512" rx="116" fill="${LIME}"/>
+  <rect width="512" height="512" rx="116" fill="${TILE}"/>
   ${check}
 `;
 // Full-bleed tile — used for maskable + Apple (the OS applies its own mask).
 const square = (check) => `
-  <rect width="512" height="512" fill="${LIME}"/>
+  <rect width="512" height="512" fill="${TILE}"/>
   ${check}
 `;
 
-const bigCheck = `<path d="M150 268 L223 341 L372 166" fill="none" stroke="${INK}"
+const bigCheck = `<path d="M150 268 L223 341 L372 166" fill="none" stroke="${ORANGE}"
   stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>`;
 // Smaller check kept inside the maskable "safe zone".
-const safeCheck = `<path d="M178 272 L236 330 L342 188" fill="none" stroke="${INK}"
+const safeCheck = `<path d="M178 272 L236 330 L342 188" fill="none" stroke="${ORANGE}"
   stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>`;
 
 const svg = (inner) =>

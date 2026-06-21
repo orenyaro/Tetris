@@ -35,7 +35,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <Text style={styles.brand}>הרשימות שלי</Text>
+      <Text style={styles.brand}>הרשימות שלנו</Text>
 
       <View style={styles.composer}>
         <TextInput

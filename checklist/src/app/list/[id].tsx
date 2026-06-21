@@ -1,16 +1,29 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { AssigneePicker } from '../../components/AssigneePicker';
 import { ChecklistItem } from '../../components/ChecklistItem';
 import { byPosition } from '../../lib/order';
+import { PEOPLE, type FilterId } from '../../lib/people';
 import {
   addItem,
   deleteItem,
   getList,
   moveItem,
+  renameList,
   resetList,
+  setAssignee,
   toggleItem,
   useItems,
   useLists,
@@ -25,24 +38,40 @@ export default function ListScreen() {
   const lists = useLists();
   const allItems = useItems();
   const [text, setText] = useState('');
+  const [filter, setFilter] = useState<FilterId>('all');
+  const [editing, setEditing] = useState(false);
+  const [titleDraft, setTitleDraft] = useState('');
+  const [pickerItem, setPickerItem] = useState<Item | null>(null);
 
   const list = useMemo(() => (id ? getList(id) : undefined), [id, lists]);
   const items = useMemo(
     () => allItems.filter((i) => i.list_id === id).sort(byPosition),
     [allItems, id],
   );
+  const visible = useMemo(
+    () => (filter === 'all' ? items : items.filter((i) => i.assignee === filter)),
+    [items, filter],
+  );
   const remaining = items.filter((i) => !i.is_done).length;
+  const canReorder = filter === 'all';
 
   const onAdd = () => {
     const trimmed = text.trim();
     if (!trimmed || !id) return;
     setText('');
-    addItem(id, trimmed);
+    // New items adopt the active person filter, so adding while filtered "as
+    // Dad" assigns to Dad automatically.
+    addItem(id, trimmed, filter === 'all' ? null : filter);
+  };
+
+  const saveTitle = () => {
+    if (id && titleDraft.trim()) renameList(id, titleDraft);
+    setEditing(false);
   };
 
   const onReset = () => {
     if (!id) return;
-    Alert.alert('איפוס הרשימה?', 'כל הסימונים יוסרו. הפריטים יישארו.', [
+    Alert.alert('איפוס הרשימה?', 'כל הסימונים (הקווים) יוסרו. הפריטים יישארו.', [
       { text: 'ביטול', style: 'cancel' },
       { text: 'איפוס', onPress: () => resetList(id) },
     ]);
@@ -54,15 +83,55 @@ export default function ListScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.iconBtn}>
           <Ionicons name="chevron-forward" size={26} color={colors.text} />
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.title} numberOfLines={1}>
-            {list?.name ?? ''}
-          </Text>
-        </View>
+
+        {editing ? (
+          <TextInput
+            value={titleDraft}
+            onChangeText={setTitleDraft}
+            onSubmitEditing={saveTitle}
+            onBlur={saveTitle}
+            autoFocus
+            style={styles.titleInput}
+            textAlign="right"
+            returnKeyType="done"
+          />
+        ) : (
+          <Pressable
+            style={styles.titleRow}
+            onPress={() => {
+              setTitleDraft(list?.name ?? '');
+              setEditing(true);
+            }}
+          >
+            <Text style={styles.title} numberOfLines={1}>
+              {list?.name ?? ''}
+            </Text>
+            <Ionicons name="pencil" size={16} color={colors.textMuted} />
+          </Pressable>
+        )}
       </View>
       <Text style={styles.meta}>
         {items.length === 0 ? 'רשימה ריקה' : `${remaining} מתוך ${items.length} נותרו`}
       </Text>
+
+      {/* Filter: everyone, or one person's items */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterBar}
+      >
+        <FilterChip label="כולם" active={filter === 'all'} onPress={() => setFilter('all')} />
+        {PEOPLE.map((p) => (
+          <FilterChip
+            key={p.id}
+            label={p.label}
+            color={p.color}
+            active={filter === p.id}
+            onPress={() => setFilter(p.id)}
+          />
+        ))}
+      </ScrollView>
 
       <View style={styles.composer}>
         <TextInput
@@ -84,25 +153,28 @@ export default function ListScreen() {
       </View>
 
       <FlatList
-        data={items}
+        data={visible}
         keyExtractor={(i) => i.id}
         contentContainerStyle={styles.listContent}
         renderItem={({ item, index }) => (
           <ChecklistItem
             item={item}
-            canUp={index > 0}
-            canDown={index < items.length - 1}
+            canUp={canReorder && index > 0}
+            canDown={canReorder && index < visible.length - 1}
             onToggle={(it: Item) => toggleItem(it.id)}
             onDelete={(it: Item) => deleteItem(it.id)}
             onUp={(it: Item) => moveItem(it.id, -1)}
             onDown={(it: Item) => moveItem(it.id, 1)}
+            onAssign={(it: Item) => setPickerItem(it)}
           />
         )}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="checkmark-done-outline" size={46} color={colors.border} />
-            <Text style={styles.emptyText}>הרשימה ריקה</Text>
-            <Text style={styles.emptyHint}>הוסיפו פריט ראשון למעלה</Text>
+            <Text style={styles.emptyText}>
+              {filter === 'all' ? 'הרשימה ריקה' : 'אין פריטים לאדם הזה'}
+            </Text>
+            <Text style={styles.emptyHint}>הוסיפו פריט חדש למעלה</Text>
           </View>
         }
       />
@@ -116,7 +188,39 @@ export default function ListScreen() {
           <Text style={styles.resetText}>איפוס סימונים</Text>
         </Pressable>
       )}
+
+      <AssigneePicker
+        visible={pickerItem != null}
+        current={pickerItem?.assignee ?? null}
+        onClose={() => setPickerItem(null)}
+        onPick={(personId) => {
+          if (pickerItem) setAssignee(pickerItem.id, personId);
+          setPickerItem(null);
+        }}
+      />
     </SafeAreaView>
+  );
+}
+
+function FilterChip({
+  label,
+  color,
+  active,
+  onPress,
+}: {
+  label: string;
+  color?: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={[styles.chip, active && styles.chipActive]}
+    >
+      {color && <View style={[styles.chipDot, { backgroundColor: color }]} />}
+      <Text style={[styles.chipText, active && styles.chipTextActive]}>{label}</Text>
+    </Pressable>
   );
 }
 
@@ -124,11 +228,16 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl },
   topbar: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm, gap: spacing.sm },
   iconBtn: { padding: spacing.xs },
-  title: {
+  titleRow: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: spacing.sm },
+  title: { fontFamily: fonts.title, fontSize: 28, color: colors.text, textAlign: 'right' },
+  titleInput: {
+    flex: 1,
     fontFamily: fonts.title,
-    fontSize: 28,
+    fontSize: 26,
     color: colors.text,
-    textAlign: 'right',
+    borderBottomWidth: 2,
+    borderBottomColor: colors.accent,
+    paddingVertical: 2,
   },
   meta: {
     fontFamily: fonts.body,
@@ -136,8 +245,25 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'right',
     marginTop: spacing.xs,
-    marginBottom: spacing.lg,
+    marginBottom: spacing.md,
   },
+  filterScroll: { flexGrow: 0, flexShrink: 0, marginBottom: spacing.md },
+  filterBar: { gap: spacing.sm, flexDirection: 'row', alignItems: 'center' },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  chipActive: { backgroundColor: colors.accentSoft, borderColor: colors.accent },
+  chipDot: { width: 11, height: 11, borderRadius: 6 },
+  chipText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.textMuted },
+  chipTextActive: { color: colors.text },
   composer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -166,7 +292,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   listContent: { paddingBottom: spacing.xxl },
-  empty: { alignItems: 'center', marginTop: spacing.xxl * 2, gap: spacing.sm },
+  empty: { alignItems: 'center', marginTop: spacing.xxl, gap: spacing.sm },
   emptyText: { fontFamily: fonts.display, fontSize: 19, color: colors.textMuted },
   emptyHint: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
   resetBtn: {

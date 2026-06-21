@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 import { swapPositions } from './order';
+import type { PersonId } from './people';
 import type { Item, List } from './types';
 
 /**
@@ -12,7 +13,7 @@ import type { Item, List } from './types';
  * positions with the neighbour, giving manual up/down control.
  */
 
-const KEY = 'checklists_v2';
+const KEY = 'checklists_v3';
 
 type State = { lists: List[]; items: Item[] };
 
@@ -96,13 +97,22 @@ export function deleteList(id: string) {
   });
 }
 
+export function renameList(id: string, name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  commit({
+    ...state,
+    lists: state.lists.map((l) => (l.id === id ? { ...l, name: trimmed } : l)),
+  });
+}
+
 export function getList(id: string): List | undefined {
   return state.lists.find((l) => l.id === id);
 }
 
 // ---- items ----------------------------------------------------------------
 
-export function addItem(listId: string, text: string): Item {
+export function addItem(listId: string, text: string, assignee: PersonId | null = null): Item {
   const maxPos = state.items
     .filter((i) => i.list_id === listId)
     .reduce((m, i) => Math.max(m, i.position), 0);
@@ -112,6 +122,7 @@ export function addItem(listId: string, text: string): Item {
     text: text.trim(),
     is_done: false,
     position: maxPos + 1,
+    assignee,
     created_at: now(),
     updated_at: now(),
   };
@@ -121,6 +132,15 @@ export function addItem(listId: string, text: string): Item {
 
 export function deleteItem(id: string) {
   commit({ ...state, items: state.items.filter((i) => i.id !== id) });
+}
+
+export function setAssignee(id: string, assignee: PersonId | null) {
+  commit({
+    ...state,
+    items: state.items.map((i) =>
+      i.id === id ? { ...i, assignee, updated_at: now() } : i,
+    ),
+  });
 }
 
 export function toggleItem(id: string) {
@@ -162,13 +182,19 @@ export function moveItem(id: string, dir: -1 | 1) {
 function seed(): State {
   const listId = uid();
   const list: List = { id: listId, name: 'קניות לשבת', position: 1, created_at: now() };
-  const texts = ['חלה', 'יין לקידוש', 'ירקות לסלט', 'עוף'];
-  const items: Item[] = texts.map((text, idx) => ({
+  const rows: { text: string; assignee: PersonId | null }[] = [
+    { text: 'חלה', assignee: 'ima' },
+    { text: 'יין לקידוש', assignee: 'abba' },
+    { text: 'ירקות לסלט', assignee: 'adam' },
+    { text: 'עוף', assignee: 'naor' },
+  ];
+  const items: Item[] = rows.map((r, idx) => ({
     id: uid(),
     list_id: listId,
-    text,
+    text: r.text,
     is_done: idx === 1, // one item starts marked, to show the strikethrough
     position: idx + 1,
+    assignee: r.assignee,
     created_at: now(),
     updated_at: now(),
   }));

@@ -5,12 +5,15 @@ export type List = {
   created_at: string;
 };
 
+import type { PersonId } from './people';
+
 export type Item = {
   id: string;
   list_id: string;
   text: string;
   is_done: boolean;
   position: number;
+  assignee: PersonId | null; // who's responsible (null = unassigned)
   created_at: string;
   updated_at: string;
 };
