@@ -2,9 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, {
-  FadeIn,
-  FadeOutLeft,
-  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
@@ -14,34 +11,25 @@ import type { Item } from '../lib/types';
 import { colors } from '../theme/colors';
 import { fonts, radius, spacing } from '../theme/typography';
 import { Checkbox } from './Checkbox';
-import { ReorderArrows } from './ReorderArrows';
 
 type Props = {
   item: Item;
-  canUp: boolean;
-  canDown: boolean;
+  active?: boolean;
   onToggle: (item: Item) => void;
   onDelete: (item: Item) => void;
-  onUp: (item: Item) => void;
-  onDown: (item: Item) => void;
   onAssign: (item: Item) => void;
   onEdit: (item: Item, text: string) => void;
-  onDragStart?: () => void;
-  active?: boolean;
+  dragHandleProps?: object; // PanResponder handlers, attached to the grip only
 };
 
 function ChecklistItemBase({
   item,
-  canUp,
-  canDown,
+  active,
   onToggle,
   onDelete,
-  onUp,
-  onDown,
   onAssign,
   onEdit,
-  onDragStart,
-  active,
+  dragHandleProps,
 }: Props) {
   const [textWidth, setTextWidth] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -73,18 +61,12 @@ function ChecklistItemBase({
   };
 
   return (
-    <Animated.View
-      entering={FadeIn.duration(240)}
-      exiting={FadeOutLeft.duration(200)}
-      layout={LinearTransition.springify().damping(18)}
-      style={[styles.row, active && styles.rowActive]}
-    >
-      <ReorderArrows
-        canUp={canUp}
-        canDown={canDown}
-        onUp={() => onUp(item)}
-        onDown={() => onDown(item)}
-      />
+    <View style={[styles.row, active && styles.rowActive]}>
+      {dragHandleProps && (
+        <View style={styles.handle} accessibilityLabel="ידית גרירה" {...dragHandleProps}>
+          <Ionicons name="reorder-three" size={24} color={colors.textMuted} />
+        </View>
+      )}
 
       {editing ? (
         <View style={styles.main}>
@@ -101,13 +83,7 @@ function ChecklistItemBase({
           />
         </View>
       ) : (
-        <Pressable
-          style={styles.main}
-          onPress={() => onToggle(item)}
-          onLongPress={onDragStart}
-          delayLongPress={180}
-          hitSlop={4}
-        >
+        <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={4}>
           <Checkbox done={item.is_done} />
           <View style={styles.textWrap}>
             <Animated.Text
@@ -158,7 +134,7 @@ function ChecklistItemBase({
           <Ionicons name="trash-outline" size={19} color={colors.textMuted} />
         </Pressable>
       )}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -170,12 +146,25 @@ const styles = StyleSheet.create({
     borderRadius: radius.md,
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
-    marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
     gap: spacing.sm,
   },
-  rowActive: { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+  rowActive: {
+    borderColor: colors.accent,
+    backgroundColor: colors.surfaceAlt,
+    shadowColor: colors.accent,
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  handle: {
+    paddingHorizontal: 2,
+    justifyContent: 'center',
+    // @ts-expect-error web-only cursor hint
+    cursor: 'grab',
+  },
   main: {
     flex: 1,
     flexDirection: 'row',

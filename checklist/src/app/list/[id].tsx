@@ -1,10 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AssigneePicker } from '../../components/AssigneePicker';
-import { ChecklistItem } from '../../components/ChecklistItem';
+import { DraggableChecklist } from '../../components/DraggableChecklist';
 import { RefreshButton } from '../../components/RefreshButton';
 import { confirmAction } from '../../lib/confirm';
 import { byPosition } from '../../lib/order';
@@ -14,8 +14,8 @@ import {
   deleteItem,
   editItemText,
   getList,
-  moveItem,
   renameList,
+  reorderItems,
   resetList,
   setAssignee,
   toggleItem,
@@ -149,32 +149,17 @@ export default function ListScreen() {
         </Pressable>
       </View>
 
-      <FlatList
-        data={visible}
-        keyExtractor={(i) => i.id}
-        contentContainerStyle={styles.listContent}
-        renderItem={({ item, index }) => (
-          <ChecklistItem
-            item={item}
-            canUp={canReorder && index > 0}
-            canDown={canReorder && index < visible.length - 1}
-            onToggle={(it: Item) => toggleItem(it.id)}
-            onDelete={(it: Item) => deleteItem(it.id)}
-            onUp={(it: Item) => moveItem(it.id, -1)}
-            onDown={(it: Item) => moveItem(it.id, 1)}
-            onAssign={(it: Item) => setPickerItem(it)}
-            onEdit={(it: Item, t: string) => editItemText(it.id, t)}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty}>
-            <Ionicons name="checkmark-done-outline" size={46} color={colors.border} />
-            <Text style={styles.emptyText}>
-              {filter === 'all' ? 'הרשימה ריקה' : 'אין פריטים לאדם הזה'}
-            </Text>
-            <Text style={styles.emptyHint}>הוסיפו פריט חדש למעלה</Text>
-          </View>
-        }
+      <DraggableChecklist
+        items={visible}
+        enabled={canReorder}
+        emptyFiltered={filter !== 'all'}
+        onReorder={(ids) => {
+          if (id) reorderItems(id, ids);
+        }}
+        onToggle={(it: Item) => toggleItem(it.id)}
+        onDelete={(it: Item) => deleteItem(it.id)}
+        onAssign={(it: Item) => setPickerItem(it)}
+        onEdit={(it: Item, t: string) => editItemText(it.id, t)}
       />
 
       {items.length > 0 && (
