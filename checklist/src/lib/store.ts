@@ -176,15 +176,15 @@ export function getList(id: string): List | undefined {
 // ---- items ----------------------------------------------------------------
 
 export function addItem(listId: string, text: string, assignee: PersonId | null = null): Item {
-  const maxPos = state.items
-    .filter((i) => i.list_id === listId)
-    .reduce((m, i) => Math.max(m, i.position), 0);
+  // New items go to the TOP of the list (smallest position).
+  const positions = state.items.filter((i) => i.list_id === listId).map((i) => i.position);
+  const minPos = positions.length ? Math.min(...positions) : 1;
   const item: Item = {
     id: uid(),
     list_id: listId,
     text: text.trim(),
     is_done: false,
-    position: maxPos + 1,
+    position: minPos - 1,
     assignee,
     created_at: now(),
     updated_at: now(),
@@ -247,6 +247,19 @@ export function resetList(listId: string) {
 export function moveList(id: string, dir: -1 | 1) {
   commit({ ...state, lists: swapPositions(state.lists, id, dir) });
   push(() => remote.upsertLists(state.lists));
+}
+
+// Apply a full new order for one list's items (used by drag-and-drop).
+export function reorderItems(listId: string, orderedIds: string[]) {
+  const at = now();
+  const posById = new Map(orderedIds.map((id, idx) => [id, idx + 1]));
+  const updated = state.items.map((i) =>
+    i.list_id === listId && posById.has(i.id)
+      ? { ...i, position: posById.get(i.id) as number, updated_at: at }
+      : i,
+  );
+  commit({ ...state, items: updated });
+  push(() => remote.upsertItems(updated.filter((i) => i.list_id === listId)));
 }
 
 export function moveItem(id: string, dir: -1 | 1) {

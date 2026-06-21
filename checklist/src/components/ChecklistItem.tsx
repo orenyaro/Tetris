@@ -26,6 +26,8 @@ type Props = {
   onDown: (item: Item) => void;
   onAssign: (item: Item) => void;
   onEdit: (item: Item, text: string) => void;
+  onDragStart?: () => void;
+  active?: boolean;
 };
 
 function ChecklistItemBase({
@@ -38,6 +40,8 @@ function ChecklistItemBase({
   onDown,
   onAssign,
   onEdit,
+  onDragStart,
+  active,
 }: Props) {
   const [textWidth, setTextWidth] = useState(0);
   const [editing, setEditing] = useState(false);
@@ -73,7 +77,7 @@ function ChecklistItemBase({
       entering={FadeIn.duration(240)}
       exiting={FadeOutLeft.duration(200)}
       layout={LinearTransition.springify().damping(18)}
-      style={styles.row}
+      style={[styles.row, active && styles.rowActive]}
     >
       <ReorderArrows
         canUp={canUp}
@@ -97,7 +101,13 @@ function ChecklistItemBase({
           />
         </View>
       ) : (
-        <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={4}>
+        <Pressable
+          style={styles.main}
+          onPress={() => onToggle(item)}
+          onLongPress={onDragStart}
+          delayLongPress={180}
+          hitSlop={4}
+        >
           <Checkbox done={item.is_done} />
           <View style={styles.textWrap}>
             <Animated.Text
@@ -165,6 +175,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     gap: spacing.sm,
   },
+  rowActive: { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
   main: {
     flex: 1,
     flexDirection: 'row',
