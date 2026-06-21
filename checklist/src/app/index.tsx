@@ -1,9 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ListCard } from '../components/ListCard';
+import { confirmAction } from '../lib/confirm';
 import { byPosition } from '../lib/order';
 import { createList, deleteList, moveList, useItems, useLists } from '../lib/store';
 import type { List } from '../lib/types';
@@ -26,11 +27,9 @@ export default function HomeScreen() {
     router.push(`/list/${list.id}`);
   };
 
-  const onDelete = (list: List) => {
-    Alert.alert('למחוק את הרשימה?', `"${list.name}" תימחק לצמיתות.`, [
-      { text: 'ביטול', style: 'cancel' },
-      { text: 'מחיקה', style: 'destructive', onPress: () => deleteList(list.id) },
-    ]);
+  const onDelete = async (list: List) => {
+    const ok = await confirmAction('למחוק את הרשימה?', `"${list.name}" תימחק לצמיתות.`, 'מחיקה');
+    if (ok) deleteList(list.id);
   };
 
   return (

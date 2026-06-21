@@ -2,7 +2,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
-  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -14,6 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AssigneePicker } from '../../components/AssigneePicker';
 import { ChecklistItem } from '../../components/ChecklistItem';
+import { confirmAction } from '../../lib/confirm';
 import { byPosition } from '../../lib/order';
 import { PEOPLE, type FilterId } from '../../lib/people';
 import {
@@ -69,12 +69,14 @@ export default function ListScreen() {
     setEditing(false);
   };
 
-  const onReset = () => {
+  const onReset = async () => {
     if (!id) return;
-    Alert.alert('איפוס הרשימה?', 'כל הסימונים (הקווים) יוסרו. הפריטים יישארו.', [
-      { text: 'ביטול', style: 'cancel' },
-      { text: 'איפוס', onPress: () => resetList(id) },
-    ]);
+    const ok = await confirmAction(
+      'איפוס הרשימה?',
+      'כל הסימונים (הקווים) יוסרו. הפריטים יישארו.',
+      'איפוס',
+    );
+    if (ok) resetList(id);
   };
 
   return (
