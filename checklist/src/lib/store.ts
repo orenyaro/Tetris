@@ -2,12 +2,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 import { swapPositions } from './order';
 import type { PersonId } from './people';
+import * as remote from './remote';
+import { isConfigured } from './supabase';
 import type { Item, List } from './types';
 
 /**
- * Local-first store. All data lives on the device (AsyncStorage → localStorage
- * on web), so every action works instantly with no backend or login. State is
- * exposed through useSyncExternalStore so screens re-render on any change.
+ * Store with optional cloud sync.
+ *
+ * - Local-first: state lives on the device (AsyncStorage → localStorage on web),
+ *   so every action is instant and works offline. Exposed via useSyncExternalStore.
+ * - When Supabase keys are present (isConfigured), the store also mirrors every
+ *   change to Supabase and refetches on realtime events, so the same lists appear
+ *   on every phone (last-write-wins).
  *
  * Ordering: both lists and items carry a `position`; reorder helpers swap
  * positions with the neighbour, giving manual up/down control.
@@ -42,15 +48,47 @@ function uid() {
 
 const now = () => new Date().toISOString();
 
+// Fire-and-forget a remote write when cloud sync is on; ignore otherwise.
+function push(run: () => unknown) {
+  if (!isConfigured) return;
+  try {
+    Promise.resolve(run()).catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+
 // ---- loading / subscription ----------------------------------------------
 
 export async function loadStore() {
+  if (isConfigured) {
+    try {
+      state = await remote.fetchAll();
+      persist();
+      // Any change on any device → refetch so all phones converge.
+      remote.subscribe(async () => {
+        try {
+          state = await remote.fetchAll();
+          persist();
+          emit();
+        } catch {
+          /* keep showing the last good state */
+        }
+      });
+      loaded = true;
+      emit();
+      return;
+    } catch {
+      // Unreachable (offline) — fall back to the cached copy below.
+    }
+  }
+
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (raw) {
       state = JSON.parse(raw);
-    } else {
-      state = seed(); // first run: a friendly starter list
+    } else if (!isConfigured) {
+      state = seed(); // first run, local-only: a friendly starter list
       persist();
     }
   } catch {
@@ -87,6 +125,7 @@ export function createList(name: string): List {
   const maxPos = state.lists.reduce((m, l) => Math.max(m, l.position ?? 0), 0);
   const list: List = { id: uid(), name: name.trim(), position: maxPos + 1, created_at: now() };
   commit({ ...state, lists: [...state.lists, list] });
+  push(() => remote.insertList(list));
   return list;
 }
 
@@ -95,6 +134,7 @@ export function deleteList(id: string) {
     lists: state.lists.filter((l) => l.id !== id),
     items: state.items.filter((i) => i.list_id !== id),
   });
+  push(() => remote.deleteList(id));
 }
 
 export function renameList(id: string, name: string) {
@@ -104,6 +144,7 @@ export function renameList(id: string, name: string) {
     ...state,
     lists: state.lists.map((l) => (l.id === id ? { ...l, name: trimmed } : l)),
   });
+  push(() => remote.updateList(id, { name: trimmed }));
 }
 
 export function getList(id: string): List | undefined {
@@ -127,29 +168,34 @@ export function addItem(listId: string, text: string, assignee: PersonId | null 
     updated_at: now(),
   };
   commit({ ...state, items: [...state.items, item] });
+  push(() => remote.insertItem(item));
   return item;
 }
 
 export function deleteItem(id: string) {
   commit({ ...state, items: state.items.filter((i) => i.id !== id) });
+  push(() => remote.deleteItem(id));
 }
 
 export function setAssignee(id: string, assignee: PersonId | null) {
+  const at = now();
   commit({
     ...state,
-    items: state.items.map((i) =>
-      i.id === id ? { ...i, assignee, updated_at: now() } : i,
-    ),
+    items: state.items.map((i) => (i.id === id ? { ...i, assignee, updated_at: at } : i)),
   });
+  push(() => remote.updateItem(id, { assignee, updated_at: at }));
 }
 
 export function toggleItem(id: string) {
+  const at = now();
+  const target = state.items.find((i) => i.id === id);
+  if (!target) return;
+  const nextDone = !target.is_done;
   commit({
     ...state,
-    items: state.items.map((i) =>
-      i.id === id ? { ...i, is_done: !i.is_done, updated_at: now() } : i,
-    ),
+    items: state.items.map((i) => (i.id === id ? { ...i, is_done: nextDone, updated_at: at } : i)),
   });
+  push(() => remote.updateItem(id, { is_done: nextDone, updated_at: at }));
 }
 
 // Reset: clear every strikethrough in a list, keep all items.
@@ -160,12 +206,14 @@ export function resetList(listId: string) {
       i.list_id === listId && i.is_done ? { ...i, is_done: false, updated_at: now() } : i,
     ),
   });
+  push(() => remote.resetListItems(listId));
 }
 
 // ---- manual reordering (swap positions with the neighbour) ----------------
 
 export function moveList(id: string, dir: -1 | 1) {
   commit({ ...state, lists: swapPositions(state.lists, id, dir) });
+  push(() => remote.upsertLists(state.lists));
 }
 
 export function moveItem(id: string, dir: -1 | 1) {
@@ -175,6 +223,7 @@ export function moveItem(id: string, dir: -1 | 1) {
   const inList = state.items.filter((i) => i.list_id === item.list_id);
   const others = state.items.filter((i) => i.list_id !== item.list_id);
   commit({ ...state, items: [...others, ...swapPositions(inList, id, dir)] });
+  push(() => remote.upsertItems(state.items.filter((i) => i.list_id === item.list_id)));
 }
 
 // ---- first-run seed -------------------------------------------------------
