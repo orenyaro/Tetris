@@ -19,6 +19,7 @@ import { PEOPLE, type FilterId } from '../../lib/people';
 import {
   addItem,
   deleteItem,
+  editItemText,
   getList,
   moveItem,
   renameList,
@@ -168,6 +169,7 @@ export default function ListScreen() {
             onUp={(it: Item) => moveItem(it.id, -1)}
             onDown={(it: Item) => moveItem(it.id, 1)}
             onAssign={(it: Item) => setPickerItem(it)}
+            onEdit={(it: Item, t: string) => editItemText(it.id, t)}
           />
         )}
         ListEmptyComponent={

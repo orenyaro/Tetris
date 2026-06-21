@@ -60,12 +60,33 @@ function push(run: () => unknown) {
 
 // ---- loading / subscription ----------------------------------------------
 
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<T>((_, reject) => setTimeout(() => reject(new Error('timeout')), ms)),
+  ]);
+}
+
+async function loadCache() {
+  try {
+    const raw = await AsyncStorage.getItem(KEY);
+    if (raw) state = JSON.parse(raw);
+  } catch {
+    /* ignore */
+  }
+}
+
 export async function loadStore() {
   if (isConfigured) {
+    // Try the cloud, but never block the UI on it: if it's slow/unreachable we
+    // show the cached copy and let the realtime subscription catch us up.
     try {
-      state = await remote.fetchAll();
+      state = await withTimeout(remote.fetchAll(), 6000);
       persist();
-      // Any change on any device → refetch so all phones converge.
+    } catch {
+      await loadCache();
+    }
+    try {
       remote.subscribe(async () => {
         try {
           state = await remote.fetchAll();
@@ -75,20 +96,21 @@ export async function loadStore() {
           /* keep showing the last good state */
         }
       });
-      loaded = true;
-      emit();
-      return;
     } catch {
-      // Unreachable (offline) — fall back to the cached copy below.
+      /* ignore */
     }
+    loaded = true;
+    emit();
+    return;
   }
 
+  // Local-only: load the cache, or seed a friendly starter list on first run.
   try {
     const raw = await AsyncStorage.getItem(KEY);
     if (raw) {
       state = JSON.parse(raw);
-    } else if (!isConfigured) {
-      state = seed(); // first run, local-only: a friendly starter list
+    } else {
+      state = seed();
       persist();
     }
   } catch {
@@ -175,6 +197,17 @@ export function addItem(listId: string, text: string, assignee: PersonId | null 
 export function deleteItem(id: string) {
   commit({ ...state, items: state.items.filter((i) => i.id !== id) });
   push(() => remote.deleteItem(id));
+}
+
+export function editItemText(id: string, text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return;
+  const at = now();
+  commit({
+    ...state,
+    items: state.items.map((i) => (i.id === id ? { ...i, text: trimmed, updated_at: at } : i)),
+  });
+  push(() => remote.updateItem(id, { text: trimmed, updated_at: at }));
 }
 
 export function setAssignee(id: string, assignee: PersonId | null) {

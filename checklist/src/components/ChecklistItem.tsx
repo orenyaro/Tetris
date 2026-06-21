@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOutLeft,
@@ -25,6 +25,7 @@ type Props = {
   onUp: (item: Item) => void;
   onDown: (item: Item) => void;
   onAssign: (item: Item) => void;
+  onEdit: (item: Item, text: string) => void;
 };
 
 function ChecklistItemBase({
@@ -36,8 +37,11 @@ function ChecklistItemBase({
   onUp,
   onDown,
   onAssign,
+  onEdit,
 }: Props) {
   const [textWidth, setTextWidth] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
   const progress = useSharedValue(item.is_done ? 1 : 0);
   const person = personById(item.assignee);
 
@@ -54,6 +58,16 @@ function ChecklistItemBase({
     color: progress.value > 0.5 ? colors.done : colors.text,
   }));
 
+  const startEdit = () => {
+    setDraft(item.text);
+    setEditing(true);
+  };
+  const saveEdit = () => {
+    const t = draft.trim();
+    if (t && t !== item.text) onEdit(item, t);
+    setEditing(false);
+  };
+
   return (
     <Animated.View
       entering={FadeIn.duration(240)}
@@ -68,42 +82,72 @@ function ChecklistItemBase({
         onDown={() => onDown(item)}
       />
 
-      <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={4}>
-        <Checkbox done={item.is_done} />
-        <View style={styles.textWrap}>
-          <Animated.Text
-            style={[styles.text, textColorStyle]}
-            onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
-          >
-            {item.text}
-          </Animated.Text>
-          <Animated.View style={[styles.strike, lineStyle]} pointerEvents="none" />
+      {editing ? (
+        <View style={styles.main}>
+          <Checkbox done={item.is_done} />
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            onSubmitEditing={saveEdit}
+            onBlur={saveEdit}
+            autoFocus
+            style={styles.editInput}
+            textAlign="right"
+            returnKeyType="done"
+          />
         </View>
-      </Pressable>
+      ) : (
+        <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={4}>
+          <Checkbox done={item.is_done} />
+          <View style={styles.textWrap}>
+            <Animated.Text
+              style={[styles.text, textColorStyle]}
+              onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+            >
+              {item.text}
+            </Animated.Text>
+            <Animated.View style={[styles.strike, lineStyle]} pointerEvents="none" />
+          </View>
+        </Pressable>
+      )}
+
+      {!editing && (
+        <Pressable
+          onPress={() => onAssign(item)}
+          hitSlop={6}
+          style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
+          accessibilityLabel="שיוך אחראי"
+        >
+          <View
+            style={[styles.chipDot, person ? { backgroundColor: person.color } : styles.chipDotNone]}
+          />
+          {person && <Text style={styles.chipLabel}>{person.label}</Text>}
+        </Pressable>
+      )}
 
       <Pressable
-        onPress={() => onAssign(item)}
-        hitSlop={6}
-        style={({ pressed }) => [styles.chip, pressed && { opacity: 0.6 }]}
-        accessibilityLabel="שיוך אחראי"
-      >
-        <View
-          style={[
-            styles.chipDot,
-            person ? { backgroundColor: person.color } : styles.chipDotNone,
-          ]}
-        />
-        {person && <Text style={styles.chipLabel}>{person.label}</Text>}
-      </Pressable>
-
-      <Pressable
-        style={({ pressed }) => [styles.trash, pressed && { opacity: 0.5 }]}
-        onPress={() => onDelete(item)}
+        style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.5 }]}
+        onPress={editing ? saveEdit : startEdit}
         hitSlop={8}
-        accessibilityLabel="מחק פריט"
+        accessibilityLabel={editing ? 'שמירה' : 'עריכת פריט'}
       >
-        <Ionicons name="trash-outline" size={19} color={colors.textMuted} />
+        <Ionicons
+          name={editing ? 'checkmark' : 'pencil'}
+          size={editing ? 22 : 17}
+          color={editing ? colors.accent : colors.textMuted}
+        />
       </Pressable>
+
+      {!editing && (
+        <Pressable
+          style={({ pressed }) => [styles.iconBtn, pressed && { opacity: 0.5 }]}
+          onPress={() => onDelete(item)}
+          hitSlop={8}
+          accessibilityLabel="מחק פריט"
+        >
+          <Ionicons name="trash-outline" size={19} color={colors.textMuted} />
+        </Pressable>
+      )}
     </Animated.View>
   );
 }
@@ -136,6 +180,16 @@ const styles = StyleSheet.create({
     writingDirection: 'rtl',
     textAlign: 'right',
   },
+  editInput: {
+    flex: 1,
+    fontFamily: fonts.body,
+    fontSize: 18,
+    color: colors.text,
+    writingDirection: 'rtl',
+    paddingVertical: 2,
+    borderBottomWidth: 2,
+    borderBottomColor: colors.accent,
+  },
   strike: {
     position: 'absolute',
     start: 0,
@@ -155,7 +209,7 @@ const styles = StyleSheet.create({
   chipDot: { width: 12, height: 12, borderRadius: 6 },
   chipDotNone: { borderWidth: 2, borderColor: colors.textMuted },
   chipLabel: { fontFamily: fonts.semibold, fontSize: 12, color: colors.text },
-  trash: { paddingStart: spacing.xs, paddingVertical: spacing.xs },
+  iconBtn: { paddingHorizontal: 2, paddingVertical: spacing.xs },
 });
 
 export const ChecklistItem = memo(ChecklistItemBase);
