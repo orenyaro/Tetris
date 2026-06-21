@@ -1,130 +1,79 @@
-# הרשימות שלנו — Shared Family Checklists
+# הרשימות שלי — Checklists
 
-A mobile app (iOS + Android) for creating and managing **shared checklists** with
-**real-time sync**: several people open the same list and every change — add,
-remove, mark, unmark, reset, create list, delete list — appears on everyone's
-device instantly. No accounts; access a list from the shared home or via a
-6-character share code.
+A clean, modern checklist app you can **install on your phone's home screen** (iPhone
++ Android) as a PWA. Create lists, add items, tap to strike them through (without
+deleting), reset all strikethroughs, permanently delete, and **reorder lists and
+items manually** with up/down arrows. Full **RTL / Hebrew**.
 
-- **Stack:** React Native + Expo (SDK 56, expo-router), Supabase (Postgres +
-  Realtime), Reanimated animations.
-- **Design:** *Coastal Calm* — sea-glass `#EFF3F2` background, deep-teal `#2A7F7E`
-  accent, Frank Ruhl Libre + Newsreader. Full **RTL / Hebrew** layout.
-- **Conflicts:** simple **last-write-wins**.
+- **Design:** "Ink & Citron" — near-black `#0E0E11` background, glowing lime `#CDFF4F`
+  accent, Rubik typeface.
+- **Storage:** local-first. Everything is saved on the device (no account, no login,
+  works offline). Built with Expo (SDK 56, expo-router) + Reanimated.
 
-| Home | List |
-|---|---|
-| ![Home](screenshots/home.png) | ![List](screenshots/list.png) |
+![Home](screenshots/home.png)
+![List](screenshots/list.png)
 
----
+## Live app + install to home screen
 
-## 1. Configure Supabase (one-time, ~3 minutes)
+Hosted via GitHub Pages: **https://orenyaro.github.io/Tetris/**
 
-1. Create a free project at <https://supabase.com> → **New project**.
-2. Open **SQL Editor ▸ New query**, paste the entire contents of
-   [`supabase/schema.sql`](supabase/schema.sql), and click **Run**. This creates
-   the `lists` and `items` tables, the `updated_at` trigger, enables **Realtime**
-   on both tables, and adds anon-access RLS policies.
-3. Open **Project Settings ▸ API** and copy:
-   - **Project URL**
-   - **anon public** key (the public client key — *not* `service_role`).
-4. In this folder, copy the env template and paste your values:
-   ```bash
-   cp .env.example .env
-   ```
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=https://YOUR-PROJECT-ref.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR-ANON-PUBLIC-KEY
-   ```
-   `.env` is git-ignored. The `EXPO_PUBLIC_` prefix is what makes Expo expose the
-   values to the app at build time.
+- **iPhone (Safari):** open the link → tap the **Share** button → **Add to Home
+  Screen** → *Add*. Launch it from the new icon; it opens full-screen like an app.
+- **Android (Chrome):** open the link → menu **⋮** → **Install app** (or *Add to
+  Home screen*).
 
-> **Privacy note (by design):** with no logins, anyone holding the anon key
-> reaches the same shared family space. That is the intended model for personal
-> family use and is required for live create/delete sync without accounts.
+Because storage is local to the device, data created in the installed app stays on
+that device.
 
-## 2. Install & run on your phone
+## Features
+
+- **Lists:** create, delete, reorder (▲/▼). The home shows all your lists.
+- **Items:** add, permanently delete, and tap to mark/unmark — marking draws an
+  animated strikethrough and never deletes the item.
+- **Reset:** clears every strikethrough in a list while keeping all items.
+- **Reorder:** up/down arrows on each list and each item for manual ordering.
+
+## Run / develop locally (optional)
 
 ```bash
 npm install
-npx expo start
+npx expo start          # phone via Expo Go, or press "w" for web
 ```
 
-- Install **Expo Go** on your phone (App Store / Play Store).
-- Scan the QR code from the terminal. The app opens on your device.
-- If your phone and computer aren't on the same network: `npx expo start --tunnel`.
-
-> **RTL note:** the app forces right-to-left layout. On a physical device the
-> very first launch may need one reload (shake ▸ *Reload*, or press `r` in the
-> terminal) for RTL to fully apply — standard React Native behavior.
-
-## 3. Preview the design without Supabase (optional)
-
-To explore the UI with sample data and **no backend**:
+Rebuild the installable web bundle and the icons:
 ```bash
-EXPO_PUBLIC_DEMO=1 npx expo start
+npm run build:web       # expo export -p web  (output in dist/)
+node scripts/generate-icons.mjs   # regenerate PWA icons into public/
 ```
-Demo mode is read-only sample data; it never connects or syncs.
 
----
+## Tests
 
-## Verifying real-time sync
-
-### Manually, with two devices/emulators
-1. Open the app on **two** phones (or one phone + a web tab via `npx expo start
-   --web`).
-2. On device A, create a list (or open one). On device B, open the **same** list
-   (tap it on the home screen, or use **"פתיחה לפי קוד שיתוף"** with the
-   6-char code shown on the list).
-3. On A: add an item → it appears on B. Tap an item → it gets a strikethrough on
-   B. Tap **איפוס סימונים** (Reset) → all strikethroughs clear on B, items stay.
-   Delete an item → it disappears on B. Everything streams both ways.
-
-### Automated tests
 ```bash
-# Deterministic proof of the sync reducer — runs anywhere, no backend:
 npm test
-
-# Live proof against your real Supabase project (uses .env):
-npm run test:live
 ```
-- `npm test` drives the exact `applyChange` reducer the app's realtime hooks use,
-  simulating two clients and asserting an action on A reaches B (add / mark /
-  unmark / reset / delete + last-write-wins).
-- `npm run test:live` connects **two real Supabase clients** to one list,
-  subscribes one, performs each action on the other, and asserts the realtime
-  events arrive. It skips automatically if `.env` is not set.
-
----
-
-## How it works
-
-- **Data model** (`supabase/schema.sql`): `lists(id, name, share_code,
-  created_at)` and `items(id, list_id, text, is_done, position, created_at,
-  updated_at)`. `is_done` is the **temporary strikethrough**; deleting a row is
-  the **permanent** removal — two distinct actions. **Reset** sets `is_done=false`
-  for a whole list and never touches the rows.
-- **Sync** (`src/hooks/useRealtime*.ts` + `src/lib/reconcile.ts`): each screen
-  seeds from a fetch, then subscribes to Supabase `postgres_changes`
-  (items scoped by `list_id`). Every device folds the same event stream through
-  one `applyChange` reducer, so all views converge. Updates simply overwrite —
-  that is the last-write-wins behavior.
-- **Screens** (`src/app/`): `index.tsx` (home — all lists, create, delete, join
-  by code) and `list/[id].tsx` (items, add, delete, mark/unmark, reset, share).
+Covers the manual-reordering logic (`src/lib/order.ts`): moving items up/down and
+the no-op at the list edges.
 
 ## Project layout
+
 ```
 checklist/
 ├─ src/
 │  ├─ app/                 # expo-router screens
-│  │  ├─ _layout.tsx       # fonts, forced RTL, theme
-│  │  ├─ index.tsx         # Home
-│  │  └─ list/[id].tsx     # List detail
-│  ├─ components/          # Checkbox, ChecklistItem, ListCard
-│  ├─ hooks/               # useRealtimeLists, useRealtimeItems
-│  ├─ lib/                 # supabase client, db CRUD, reconcile, types, demo
+│  │  ├─ _layout.tsx       # fonts, forced RTL, dark theme, store boot
+│  │  ├─ +html.tsx         # PWA <head>: manifest, Apple meta, service worker
+│  │  ├─ index.tsx         # Home (all lists)
+│  │  └─ list/[id].tsx     # List detail (items)
+│  ├─ components/          # Checkbox, ChecklistItem, ListCard, ReorderArrows
+│  ├─ lib/                 # store (local-first), order (reorder), types
 │  └─ theme/               # colors, typography
-├─ supabase/schema.sql     # run this in Supabase
-├─ tests/                  # reconcile.test.ts (offline), sync.test.ts (live)
-└─ .env.example
+├─ public/                 # manifest.webmanifest, sw.js, app icons
+├─ tests/order.test.ts
+└─ scripts/                # generate-icons.mjs, screenshot.mjs
 ```
+
+## Note on multi-device sync
+
+This version is single-device (local-first), which is what makes it install-and-go
+with zero setup. Syncing the same list across several phones in real time is a
+separate, optional step (a small cloud backend) that can be added later.

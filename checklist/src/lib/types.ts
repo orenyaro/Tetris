@@ -1,7 +1,7 @@
 export type List = {
   id: string;
   name: string;
-  share_code: string;
+  position: number;
   created_at: string;
 };
 

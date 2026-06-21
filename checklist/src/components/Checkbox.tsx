@@ -8,24 +8,21 @@ import Animated, {
 } from 'react-native-reanimated';
 import { colors } from '../theme/colors';
 
-/** A round checkbox that springs/fills when toggled. */
+/** A rounded-square checkbox that fills with lime and springs when toggled. */
 export function Checkbox({ done }: { done: boolean }) {
   const progress = useSharedValue(done ? 1 : 0);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
-    progress.value = withTiming(done ? 1 : 0, { duration: 220 });
-  }, [done, progress]);
+    progress.value = withTiming(done ? 1 : 0, { duration: 200 });
+    scale.value = withSpring(done ? 1.15 : 1, { damping: 7, stiffness: 240 });
+    scale.value = withSpring(1, { damping: 12, stiffness: 180 });
+  }, [done, progress, scale]);
 
   const fillStyle = useAnimatedStyle(() => ({
     opacity: progress.value,
-    transform: [{ scale: 0.6 + progress.value * 0.4 }],
+    transform: [{ scale: 0.5 + progress.value * 0.5 }],
   }));
-
-  const scale = useSharedValue(1);
-  useEffect(() => {
-    scale.value = withSpring(done ? 1.12 : 1, { damping: 6, stiffness: 220 });
-    scale.value = withSpring(1, { damping: 10, stiffness: 180 });
-  }, [done, scale]);
 
   const boxStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
@@ -35,7 +32,7 @@ export function Checkbox({ done }: { done: boolean }) {
         {
           width: 26,
           height: 26,
-          borderRadius: 13,
+          borderRadius: 9,
           borderWidth: 2,
           borderColor: done ? colors.accent : colors.textMuted,
           backgroundColor: done ? colors.accent : 'transparent',
@@ -46,7 +43,7 @@ export function Checkbox({ done }: { done: boolean }) {
       ]}
     >
       <Animated.View style={fillStyle}>
-        <Ionicons name="checkmark-sharp" size={16} color={colors.surface} />
+        <Ionicons name="checkmark-sharp" size={16} color={colors.onAccent} />
       </Animated.View>
     </Animated.View>
   );

@@ -1,10 +1,9 @@
-// Frank Ruhl Libre carries both Hebrew and Latin glyphs (cohesive RTL),
-// Newsreader is reserved for the large branding title.
+// Rubik — a modern geometric sans with full Hebrew + Latin support.
 export const fonts = {
-  title: 'Newsreader_500Medium',
-  display: 'FrankRuhlLibre_700Bold',
-  semibold: 'FrankRuhlLibre_500Medium',
-  body: 'FrankRuhlLibre_400Regular',
+  title: 'Rubik_800ExtraBold',
+  display: 'Rubik_600SemiBold',
+  semibold: 'Rubik_500Medium',
+  body: 'Rubik_400Regular',
 } as const;
 
 export const spacing = {

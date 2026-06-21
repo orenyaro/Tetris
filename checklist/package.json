@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo-google-fonts/frank-ruhl-libre": "^0.4.1",
     "@expo-google-fonts/newsreader": "^0.4.1",
+    "@expo-google-fonts/rubik": "^0.4.2",
     "@expo/ui": "~56.0.18",
     "@expo/vector-icons": "^15.1.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
@@ -46,9 +47,9 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build:web": "expo export -p web",
     "lint": "expo lint",
-    "test": "node --import tsx --test tests/reconcile.test.ts",
-    "test:live": "node --import tsx --test tests/sync.test.ts"
+    "test": "node --import tsx --test tests/order.test.ts"
   },
   "private": true
 }

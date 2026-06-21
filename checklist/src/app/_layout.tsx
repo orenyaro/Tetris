@@ -1,16 +1,17 @@
 import {
-  FrankRuhlLibre_400Regular,
-  FrankRuhlLibre_500Medium,
-  FrankRuhlLibre_700Bold,
+  Rubik_400Regular,
+  Rubik_500Medium,
+  Rubik_600SemiBold,
+  Rubik_800ExtraBold,
   useFonts,
-} from '@expo-google-fonts/frank-ruhl-libre';
-import { Newsreader_500Medium } from '@expo-google-fonts/newsreader';
-import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+} from '@expo-google-fonts/rubik';
+import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { I18nManager } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { loadStore } from '../lib/store';
 import { colors } from '../theme/colors';
 
 // Hebrew-first: force RTL layout app-wide.
@@ -20,28 +21,42 @@ I18nManager.forceRTL(true);
 SplashScreen.preventAutoHideAsync();
 
 const navTheme = {
-  ...DefaultTheme,
-  colors: { ...DefaultTheme.colors, background: colors.background, primary: colors.accent },
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: colors.background,
+    card: colors.background,
+    primary: colors.accent,
+    text: colors.text,
+    border: colors.border,
+  },
 };
 
 export default function RootLayout() {
-  const [loaded] = useFonts({
-    FrankRuhlLibre_400Regular,
-    FrankRuhlLibre_500Medium,
-    FrankRuhlLibre_700Bold,
-    Newsreader_500Medium,
+  const [fontsLoaded] = useFonts({
+    Rubik_400Regular,
+    Rubik_500Medium,
+    Rubik_600SemiBold,
+    Rubik_800ExtraBold,
   });
+  const [storeReady, setStoreReady] = useState(false);
 
   useEffect(() => {
-    if (loaded) SplashScreen.hideAsync();
-  }, [loaded]);
+    loadStore().then(() => setStoreReady(true));
+  }, []);
 
-  if (!loaded) return null;
+  const ready = fontsLoaded && storeReady;
+
+  useEffect(() => {
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
       <ThemeProvider value={navTheme}>
-        <StatusBar style="dark" />
+        <StatusBar style="light" />
         <Stack
           screenOptions={{
             headerShown: false,

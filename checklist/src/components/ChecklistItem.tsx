@@ -1,30 +1,34 @@
 import { Ionicons } from '@expo/vector-icons';
 import { memo, useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, {
   FadeIn,
   FadeOutLeft,
-  Layout,
+  LinearTransition,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
+import type { Item } from '../lib/types';
 import { colors } from '../theme/colors';
 import { fonts, radius, spacing } from '../theme/typography';
-import type { Item } from '../lib/types';
 import { Checkbox } from './Checkbox';
+import { ReorderArrows } from './ReorderArrows';
 
 type Props = {
   item: Item;
+  canUp: boolean;
+  canDown: boolean;
   onToggle: (item: Item) => void;
   onDelete: (item: Item) => void;
+  onUp: (item: Item) => void;
+  onDown: (item: Item) => void;
 };
 
-function ChecklistItemBase({ item, onToggle, onDelete }: Props) {
+function ChecklistItemBase({ item, canUp, canDown, onToggle, onDelete, onUp, onDown }: Props) {
   const [textWidth, setTextWidth] = useState(0);
   const progress = useSharedValue(item.is_done ? 1 : 0);
 
-  // Animate the strikethrough drawing across (and retracting) on toggle.
   useEffect(() => {
     progress.value = withTiming(item.is_done ? 1 : 0, { duration: 260 });
   }, [item.is_done, progress]);
@@ -40,12 +44,19 @@ function ChecklistItemBase({ item, onToggle, onDelete }: Props) {
 
   return (
     <Animated.View
-      entering={FadeIn.duration(260)}
-      exiting={FadeOutLeft.duration(220)}
-      layout={Layout.springify().damping(18)}
+      entering={FadeIn.duration(240)}
+      exiting={FadeOutLeft.duration(200)}
+      layout={LinearTransition.springify().damping(18)}
       style={styles.row}
     >
-      <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={6}>
+      <ReorderArrows
+        canUp={canUp}
+        canDown={canDown}
+        onUp={() => onUp(item)}
+        onDown={() => onDown(item)}
+      />
+
+      <Pressable style={styles.main} onPress={() => onToggle(item)} hitSlop={4}>
         <Checkbox done={item.is_done} />
         <View style={styles.textWrap}>
           <Animated.Text
@@ -62,9 +73,9 @@ function ChecklistItemBase({ item, onToggle, onDelete }: Props) {
         style={({ pressed }) => [styles.trash, pressed && { opacity: 0.5 }]}
         onPress={() => onDelete(item)}
         hitSlop={8}
-        accessibilityLabel="Delete item"
+        accessibilityLabel="מחק פריט"
       >
-        <Ionicons name="trash-outline" size={20} color={colors.textMuted} />
+        <Ionicons name="trash-outline" size={19} color={colors.textMuted} />
       </Pressable>
     </Animated.View>
   );
@@ -79,11 +90,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,
-    shadowColor: colors.shadow,
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
   },
   main: {
     flex: 1,
@@ -91,10 +100,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.md,
   },
-  textWrap: {
-    flex: 1,
-    justifyContent: 'center',
-  },
+  textWrap: { flex: 1, justifyContent: 'center' },
   text: {
     fontFamily: fonts.body,
     fontSize: 18,
@@ -110,10 +116,7 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: colors.strike,
   },
-  trash: {
-    paddingStart: spacing.md,
-    paddingVertical: spacing.xs,
-  },
+  trash: { paddingStart: spacing.sm, paddingVertical: spacing.xs },
 });
 
 export const ChecklistItem = memo(ChecklistItemBase);
