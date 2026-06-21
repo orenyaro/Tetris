@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ListCard } from '../components/ListCard';
+import { RefreshButton } from '../components/RefreshButton';
 import { confirmAction } from '../lib/confirm';
 import { byPosition } from '../lib/order';
 import { createList, deleteList, moveList, useItems, useLists } from '../lib/store';
@@ -34,7 +35,11 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'left', 'right']}>
-      <Text style={styles.brand}>הרשימות שלנו</Text>
+      <View style={styles.header}>
+        <RefreshButton />
+        <Text style={styles.brand}>הרשימות שלנו</Text>
+        <View style={styles.headerSpacer} />
+      </View>
 
       <View style={styles.composer}>
         <TextInput
@@ -85,13 +90,20 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background, paddingHorizontal: spacing.xl },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: spacing.lg,
+    marginBottom: spacing.xl,
+  },
+  headerSpacer: { width: 34 },
   brand: {
+    flex: 1,
     fontFamily: fonts.title,
     fontSize: 34,
     color: colors.text,
     textAlign: 'center',
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
   },
   composer: {
     flexDirection: 'row',

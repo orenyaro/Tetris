@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import DraggableFlatList, { ScaleDecorator } from 'react-native-draggable-flatlist';
+import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AssigneePicker } from '../../components/AssigneePicker';
 import { ChecklistItem } from '../../components/ChecklistItem';
+import { RefreshButton } from '../../components/RefreshButton';
 import { confirmAction } from '../../lib/confirm';
 import { byPosition } from '../../lib/order';
 import { PEOPLE, type FilterId } from '../../lib/people';
@@ -16,7 +16,6 @@ import {
   getList,
   moveItem,
   renameList,
-  reorderItems,
   resetList,
   setAssignee,
   toggleItem,
@@ -106,6 +105,7 @@ export default function ListScreen() {
             <Ionicons name="pencil" size={16} color={colors.textMuted} />
           </Pressable>
         )}
+        <RefreshButton />
       </View>
       <Text style={styles.meta}>
         {items.length === 0 ? 'רשימה ריקה' : `${remaining} מתוך ${items.length} נותרו`}
@@ -149,38 +149,23 @@ export default function ListScreen() {
         </Pressable>
       </View>
 
-      <DraggableFlatList
+      <FlatList
         data={visible}
         keyExtractor={(i) => i.id}
         contentContainerStyle={styles.listContent}
-        // Drag only when viewing everyone (reordering a filtered subset is
-        // ambiguous); auto-scrolls when dragging near the top/bottom edge.
-        activationDistance={canReorder ? 12 : 100000}
-        autoscrollThreshold={70}
-        autoscrollSpeed={180}
-        onDragEnd={({ data }) => {
-          if (id && canReorder) reorderItems(id, data.map((it) => it.id));
-        }}
-        renderItem={({ item, drag, isActive, getIndex }) => {
-          const index = getIndex() ?? 0;
-          return (
-            <ScaleDecorator activeScale={1.03}>
-              <ChecklistItem
-                item={item}
-                canUp={canReorder && index > 0}
-                canDown={canReorder && index < visible.length - 1}
-                active={isActive}
-                onDragStart={canReorder ? drag : undefined}
-                onToggle={(it: Item) => toggleItem(it.id)}
-                onDelete={(it: Item) => deleteItem(it.id)}
-                onUp={(it: Item) => moveItem(it.id, -1)}
-                onDown={(it: Item) => moveItem(it.id, 1)}
-                onAssign={(it: Item) => setPickerItem(it)}
-                onEdit={(it: Item, t: string) => editItemText(it.id, t)}
-              />
-            </ScaleDecorator>
-          );
-        }}
+        renderItem={({ item, index }) => (
+          <ChecklistItem
+            item={item}
+            canUp={canReorder && index > 0}
+            canDown={canReorder && index < visible.length - 1}
+            onToggle={(it: Item) => toggleItem(it.id)}
+            onDelete={(it: Item) => deleteItem(it.id)}
+            onUp={(it: Item) => moveItem(it.id, -1)}
+            onDown={(it: Item) => moveItem(it.id, 1)}
+            onAssign={(it: Item) => setPickerItem(it)}
+            onEdit={(it: Item, t: string) => editItemText(it.id, t)}
+          />
+        )}
         ListEmptyComponent={
           <View style={styles.empty}>
             <Ionicons name="checkmark-done-outline" size={46} color={colors.border} />

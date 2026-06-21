@@ -131,6 +131,19 @@ export function isLoaded() {
   return loaded;
 }
 
+// Force a fresh pull from the cloud (used by the manual refresh button on native;
+// on web the button reloads the page, which re-runs loadStore anyway).
+export async function syncNow() {
+  if (!isConfigured) return;
+  try {
+    state = await remote.fetchAll();
+    persist();
+    emit();
+  } catch {
+    /* keep showing the last good state */
+  }
+}
+
 const getLists = () => state.lists;
 const getItems = () => state.items;
 
