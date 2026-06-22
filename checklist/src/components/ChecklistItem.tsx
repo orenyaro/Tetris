@@ -14,7 +14,8 @@ import { Checkbox } from './Checkbox';
 
 type Props = {
   item: Item;
-  active?: boolean;
+  active?: boolean; // the floating drag copy (highlighted)
+  dimmed?: boolean; // the original row while being dragged
   onToggle: (item: Item) => void;
   onDelete: (item: Item) => void;
   onAssign: (item: Item) => void;
@@ -25,6 +26,7 @@ type Props = {
 function ChecklistItemBase({
   item,
   active,
+  dimmed,
   onToggle,
   onDelete,
   onAssign,
@@ -61,7 +63,7 @@ function ChecklistItemBase({
   };
 
   return (
-    <View style={[styles.row, active && styles.rowActive]}>
+    <View style={[styles.row, active && styles.rowActive, dimmed && styles.rowDimmed]}>
       {dragHandleProps && (
         <View style={styles.handle} accessibilityLabel="ידית גרירה" {...dragHandleProps}>
           <Ionicons name="reorder-three" size={24} color={colors.textMuted} />
@@ -159,11 +161,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+  rowDimmed: { opacity: 0.25 },
   handle: {
     paddingHorizontal: 2,
     justifyContent: 'center',
-    // @ts-expect-error web-only cursor hint
+    // @ts-expect-error web-only: grab cursor + don't let the browser treat a
+    // handle touch-drag as a page scroll.
     cursor: 'grab',
+    touchAction: 'none',
+    userSelect: 'none',
   },
   main: {
     flex: 1,

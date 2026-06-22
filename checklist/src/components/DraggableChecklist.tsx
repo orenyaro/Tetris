@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   PanResponder,
   type PanResponderInstance,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,8 +16,10 @@ import { fonts, spacing } from '../theme/typography';
 import { ChecklistItem } from './ChecklistItem';
 
 const GAP = spacing.md; // vertical space between rows
-const EDGE = 70; // distance from a viewport edge that triggers auto-scroll
-const SCROLL_STEP = 9; // px per tick while auto-scrolling
+const EDGE = 80; // distance from a viewport edge that triggers auto-scroll
+const SCROLL_STEP = 10; // px per tick while auto-scrolling
+
+const noop = () => {};
 
 type Props = {
   items: Item[]; // already ordered
@@ -30,9 +34,12 @@ type Props = {
 
 /**
  * A scrollable checklist where each row has a drag handle. Only the handle
- * starts a drag (via PanResponder), so the rest of the list scrolls normally —
- * fixing the web limitation where library-based drag disables scrolling.
- * Dragging near the top/bottom edge auto-scrolls the list.
+ * starts a drag (PanResponder), so the rest of the list scrolls normally.
+ *
+ * During a drag the underlying list stays static (so the gesture/DOM node is
+ * never torn down) and a floating copy of the row follows the finger. The list
+ * auto-scrolls when the finger nears the top/bottom edge, and the reorder is
+ * committed once, on release.
  */
 export function DraggableChecklist({
   items,
@@ -51,6 +58,7 @@ export function DraggableChecklist({
   const draggingRef = useRef<string | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const wrapRef = useRef<View>(null);
+  const floatY = useRef(new Animated.Value(0)).current;
 
   const scrollY = useRef(0);
   const listTop = useRef(0);
@@ -68,11 +76,6 @@ export function DraggableChecklist({
     }
   }, [items]);
 
-  const setOrderBoth = (next: Item[]) => {
-    orderRef.current = next;
-    setOrder(next);
-  };
-
   const stopAuto = () => {
     if (autoTimer.current) {
       clearInterval(autoTimer.current);
@@ -80,19 +83,8 @@ export function DraggableChecklist({
     }
   };
 
-  const applyTargetFromY = (absY: number) => {
-    const list = orderRef.current;
-    const id = draggingRef.current;
-    if (!id) return;
-    const contentY = absY - listTop.current + scrollY.current;
-    let target = Math.floor(contentY / rowHeight.current);
-    target = Math.max(0, Math.min(list.length - 1, target));
-    const curIdx = list.findIndex((i) => i.id === id);
-    if (curIdx === -1 || curIdx === target) return;
-    const next = [...list];
-    const [moved] = next.splice(curIdx, 1);
-    next.splice(target, 0, moved);
-    setOrderBoth(next);
+  const positionFloat = (absY: number) => {
+    floatY.setValue(absY - listTop.current - rowHeight.current / 2);
   };
 
   const maybeAutoScroll = (absY: number) => {
@@ -111,45 +103,95 @@ export function DraggableChecklist({
       const max = Math.max(0, contentHeight.current - listHeight.current);
       let y = scrollY.current + dir * SCROLL_STEP;
       y = Math.max(0, Math.min(max, y));
+      if (y === scrollY.current) return; // reached an end
       scrollY.current = y;
       scrollRef.current?.scrollTo({ y, animated: false });
-      applyTargetFromY(lastAbsY.current);
     }, 16);
   };
 
+  const beginDrag = (id: string, absY: number) => {
+    draggingRef.current = id;
+    lastAbsY.current = absY;
+    positionFloat(absY);
+    setDraggingId(id);
+  };
+
+  const moveDrag = (absY: number) => {
+    if (!draggingRef.current) return;
+    lastAbsY.current = absY;
+    positionFloat(absY);
+    maybeAutoScroll(absY);
+  };
+
+  function endDrag() {
+    stopAuto();
+    const id = draggingRef.current;
+    draggingRef.current = null;
+    setDraggingId(null);
+    if (!id) return;
+
+    // Drop where the finger is, relative to the (possibly scrolled) content.
+    const list = orderRef.current;
+    const contentY = lastAbsY.current - listTop.current + scrollY.current;
+    let target = Math.floor(contentY / rowHeight.current);
+    target = Math.max(0, Math.min(list.length - 1, target));
+    const curIdx = list.findIndex((i) => i.id === id);
+    if (curIdx === -1 || curIdx === target) return;
+
+    const next = [...list];
+    const [moved] = next.splice(curIdx, 1);
+    next.splice(target, 0, moved);
+    orderRef.current = next;
+    setOrder(next);
+    onReorder(next.map((i) => i.id));
+  }
+
+  // Native: PanResponder on the handle. Stable across a drag because `order`
+  // doesn't change mid-drag.
   const makeResponder = (id: string): PanResponderInstance =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => enabled,
       onMoveShouldSetPanResponder: () => enabled,
-      onPanResponderGrant: () => {
-        draggingRef.current = id;
-        setDraggingId(id);
-      },
-      onPanResponderMove: (_e, g) => {
-        lastAbsY.current = g.moveY;
-        applyTargetFromY(g.moveY);
-        maybeAutoScroll(g.moveY);
-      },
+      onPanResponderGrant: (_e, g) => beginDrag(id, g.y0),
+      onPanResponderMove: (_e, g) => moveDrag(g.moveY),
       onPanResponderRelease: endDrag,
       onPanResponderTerminate: endDrag,
     });
 
-  function endDrag() {
-    stopAuto();
-    draggingRef.current = null;
-    setDraggingId(null);
-    onReorder(orderRef.current.map((i) => i.id));
-  }
-
   useEffect(() => stopAuto, []);
 
-  // One PanResponder per row id (cheap; lists are small).
   const responders = useMemo(() => {
     const map = new Map<string, PanResponderInstance>();
-    for (const it of order) map.set(it.id, makeResponder(it.id));
+    if (Platform.OS !== 'web') {
+      for (const it of order) map.set(it.id, makeResponder(it.id));
+    }
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [order.map((i) => i.id).join(','), enabled]);
+
+  // Web: use Pointer Events with pointer capture. Capture keeps the drag alive
+  // while we programmatically scroll the list (a plain pointer would be
+  // cancelled the moment the element under it scrolls).
+  const webHandleProps = (id: string) => ({
+    onPointerDown: (e: any) => {
+      try {
+        e.currentTarget?.setPointerCapture?.(e.nativeEvent.pointerId);
+      } catch {
+        /* ignore */
+      }
+      beginDrag(id, e.nativeEvent.clientY);
+    },
+    onPointerMove: (e: any) => moveDrag(e.nativeEvent.clientY),
+    onPointerUp: endDrag,
+    onPointerCancel: endDrag,
+  });
+
+  const handleProps = (id: string) => {
+    if (!enabled) return undefined;
+    return Platform.OS === 'web' ? webHandleProps(id) : responders.get(id)?.panHandlers;
+  };
+
+  const dragged = draggingId ? order.find((i) => i.id === draggingId) : undefined;
 
   if (order.length === 0) {
     return (
@@ -174,7 +216,6 @@ export function DraggableChecklist({
     >
       <ScrollView
         ref={scrollRef}
-        scrollEnabled={!draggingId}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.content}
         scrollEventThrottle={16}
@@ -195,8 +236,8 @@ export function DraggableChecklist({
           >
             <ChecklistItem
               item={item}
-              active={draggingId === item.id}
-              dragHandleProps={enabled ? responders.get(item.id)?.panHandlers : undefined}
+              dimmed={draggingId === item.id}
+              dragHandleProps={handleProps(item.id)}
               onToggle={onToggle}
               onDelete={onDelete}
               onAssign={onAssign}
@@ -205,6 +246,22 @@ export function DraggableChecklist({
           </View>
         ))}
       </ScrollView>
+
+      {dragged && (
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.overlay, { transform: [{ translateY: floatY }] }]}
+        >
+          <ChecklistItem
+            item={dragged}
+            active
+            onToggle={noop}
+            onDelete={noop}
+            onAssign={noop}
+            onEdit={noop}
+          />
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -213,6 +270,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingBottom: spacing.xxl },
   rowWrap: { marginBottom: GAP },
+  overlay: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 20 },
   empty: { alignItems: 'center', marginTop: spacing.xxl, gap: spacing.sm },
   emptyText: { fontFamily: fonts.display, fontSize: 19, color: colors.textMuted },
   emptyHint: { fontFamily: fonts.body, fontSize: 14, color: colors.textMuted },
