@@ -7,7 +7,7 @@ import { ListCard } from '../components/ListCard';
 import { RefreshButton } from '../components/RefreshButton';
 import { confirmAction } from '../lib/confirm';
 import { byPosition } from '../lib/order';
-import { createList, deleteList, moveList, useItems, useLists } from '../lib/store';
+import { createList, deleteList, moveList, useItems, useLists, useSyncError } from '../lib/store';
 import type { List } from '../lib/types';
 import { colors } from '../theme/colors';
 import { fonts, radius, spacing } from '../theme/typography';
@@ -16,6 +16,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const lists = useLists();
   const items = useItems();
+  const syncError = useSyncError();
   const [name, setName] = useState('');
 
   const ordered = useMemo(() => [...lists].sort(byPosition), [lists]);
@@ -40,6 +41,13 @@ export default function HomeScreen() {
         <Text style={styles.brand}>הרשימות שלנו</Text>
         <View style={styles.headerSpacer} />
       </View>
+
+      {syncError && (
+        <View style={styles.syncBanner}>
+          <Ionicons name="warning-outline" size={16} color={colors.danger} />
+          <Text style={styles.syncText}>שגיאת סנכרון: {syncError}</Text>
+        </View>
+      )}
 
       <View style={styles.composer}>
         <TextInput
@@ -98,6 +106,19 @@ const styles = StyleSheet.create({
     marginBottom: spacing.xl,
   },
   headerSpacer: { width: 34 },
+  syncBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    backgroundColor: 'rgba(255,107,107,0.12)',
+    borderColor: colors.danger,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
+  },
+  syncText: { flex: 1, fontFamily: fonts.body, fontSize: 13, color: colors.danger, textAlign: 'right' },
   brand: {
     flex: 1,
     fontFamily: fonts.title,

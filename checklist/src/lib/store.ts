@@ -48,14 +48,28 @@ function uid() {
 
 const now = () => new Date().toISOString();
 
-// Fire-and-forget a remote write when cloud sync is on; ignore otherwise.
+// Surfaced sync error (Supabase resolves failures as a { error } field rather
+// than throwing, so we must inspect it — otherwise failed writes are silent).
+let syncError: string | null = null;
+const getSyncError = () => syncError;
+function setSyncError(msg: string | null) {
+  if (syncError === msg) return;
+  syncError = msg;
+  emit();
+}
+export function useSyncError(): string | null {
+  return useSyncExternalStore(subscribe, getSyncError, getSyncError);
+}
+
+// Send a remote write when cloud sync is on; capture any error so it's visible.
 function push(run: () => unknown) {
   if (!isConfigured) return;
-  try {
-    Promise.resolve(run()).catch(() => {});
-  } catch {
-    /* ignore */
-  }
+  Promise.resolve(run())
+    .then((res: any) => {
+      if (res && res.error) setSyncError(res.error.message ?? String(res.error));
+      else setSyncError(null);
+    })
+    .catch((e: any) => setSyncError(e?.message ?? 'sync failed'));
 }
 
 // ---- loading / subscription ----------------------------------------------
@@ -83,7 +97,9 @@ export async function loadStore() {
     try {
       state = await withTimeout(remote.fetchAll(), 6000);
       persist();
-    } catch {
+      setSyncError(null);
+    } catch (e: any) {
+      setSyncError('טעינה מהשרת נכשלה: ' + (e?.message ?? 'לא ידוע'));
       await loadCache();
     }
     try {
