@@ -95,8 +95,19 @@ export async function loadStore() {
     // Try the cloud, but never block the UI on it: if it's slow/unreachable we
     // show the cached copy and let the realtime subscription catch us up.
     try {
-      state = await withTimeout(remote.fetchAll(), 6000);
-      persist();
+      const fetched = await withTimeout(remote.fetchAll(), 6000);
+      if (fetched.lists.length === 0 && fetched.items.length === 0) {
+        // Guard against wiping local data if the server unexpectedly returns
+        // empty (e.g. a paused project). Keep the cached copy when we have one.
+        await loadCache();
+        if (state.lists.length === 0 && state.items.length === 0) {
+          state = fetched;
+          persist();
+        }
+      } else {
+        state = fetched;
+        persist();
+      }
       setSyncError(null);
     } catch (e: any) {
       setSyncError('טעינה מהשרת נכשלה: ' + (e?.message ?? 'לא ידוע'));
